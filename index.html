@@ -3,263 +3,564 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Koperasi Artha Harian - Cloud</title>
+    <title>Sistem Koperasi Harian - Cloud Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #f9fafb; font-family: 'Inter', sans-serif; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; }
-        label { font-size: 0.7rem; font-weight: 700; color: #4b5563; text-transform: uppercase; margin-bottom: 0.25rem; display: block; }
-        input, select { border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.6rem; width: 100%; transition: border 0.2s; font-size: 0.9rem; }
-        input:focus { border-color: #2563eb; outline: none; }
-        .btn-main { background: #2563eb; color: white; padding: 0.75rem; border-radius: 8px; font-weight: 600; width: 100%; transition: all 0.2s; }
-        .btn-main:hover { background: #1d4ed8; transform: translateY(-1px); }
-        #loader { position: fixed; inset: 0; background: white; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .spin { border: 3px solid #f3f3f3; border-top: 3px solid #2563eb; border-radius: 50%; width: 30px; height: 30px; animation: spin 0.8s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { background-color: #f3f4f6; font-family: sans-serif; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 1.25rem; margin-bottom: 1rem; }
+        input, select { border: 1px solid #d1d5db; border-radius: 4px; padding: 0.5rem; width: 100%; margin-top: 0.25rem; }
+        label { font-weight: 600; font-size: 0.75rem; color: #374151; text-transform: uppercase; }
+        .btn { padding: 0.5rem 1rem; border-radius: 4px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background-color: #2563eb; color: white; }
+        .btn-indigo { background-color: #4f46e5; color: white; }
+        .status-badge { padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); display: flex; align-items: center; justify-content: center; z-index: 100; }
     </style>
 </head>
-<body class="p-4">
-    <!-- Layar Loading -->
-    <div id="loader">
-        <div id="loader-content" class="text-center">
-            <div class="spin mx-auto mb-4"></div>
-            <p class="text-gray-600 font-medium">Menyambungkan ke dataku-e8e94...</p>
-        </div>
-        <div id="setup-msg" class="hidden max-w-sm p-6 bg-white border border-gray-200 rounded-2xl shadow-xl text-left">
-            <h3 class="text-red-600 font-bold text-lg mb-2">Akses Ditolak</h3>
-            <p class="text-sm text-gray-500 mb-4">Pastikan <b>Anonymous Auth</b> sudah aktif di Firebase Console proyek <b>dataku-e8e94</b>.</p>
-            <button onclick="location.reload()" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold">Segarkan Halaman</button>
+<body class="p-4 md:p-6">
+    <div id="loader" class="loading-overlay">
+        <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
+            <p class="mt-2 font-bold text-blue-600">Menghubungkan ke Cloud...</p>
         </div>
     </div>
 
-    <div class="max-w-6xl mx-auto">
-        <header class="flex justify-between items-center mb-6">
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-6 flex justify-between items-end border-b pb-4">
             <div>
-                <h1 class="text-xl font-extrabold text-gray-900">Artha Harian</h1>
-                <div class="flex items-center text-[10px] text-green-600 font-bold">
-                    <span class="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span> DATABASE CLOUD TERHUBUNG
-                </div>
+                <h1 class="text-2xl font-bold text-gray-800 tracking-tight">Koperasi Artha Harian</h1>
+                <p class="text-sm text-gray-500">Cloud Synchronized System</p>
             </div>
             <div id="clock" class="text-right text-xs text-gray-400 font-mono"></div>
         </header>
 
-        <!-- Ringkasan Keuangan -->
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-            <div class="card !p-3 border-l-4 border-blue-600"><label>Kas Tunai</label><p id="stat-kas" class="font-bold text-blue-700">Rp 0</p></div>
-            <div class="card !p-3 border-l-4 border-orange-500"><label>Hari Ini</label><p id="stat-hari" class="font-bold text-orange-700">Rp 0</p></div>
-            <div class="card !p-3 border-l-4 border-purple-500"><label>Komisi 3%</label><p id="stat-gaji" class="font-bold text-purple-700">Rp 0</p></div>
-            <div class="card !p-3 border-l-4 border-green-600"><label>Tabungan</label><p id="stat-tabungan" class="font-bold text-green-700">Rp 0</p></div>
-            <div class="card !p-3 border-l-4 border-red-500"><label>Piutang</label><p id="stat-piutang" class="font-bold text-red-700">Rp 0</p></div>
-            <div class="card !p-3 border-l-4 border-gray-400"><label>Bulan Ini</label><p id="stat-bulan" class="font-bold text-gray-700">Rp 0</p></div>
+        <!-- Ringkasan Statistik -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+            <div class="card border-l-4 border-blue-600 bg-blue-50 !p-3">
+                <p class="text-[10px] text-blue-700 uppercase font-bold">Total Kas</p>
+                <h2 id="total-kas" class="text-base font-bold text-blue-800">Rp 0</h2>
+            </div>
+            <div class="card border-l-4 border-yellow-500 bg-yellow-50 !p-3">
+                <p class="text-[10px] text-yellow-700 uppercase font-bold">Angsuran Hari Ini</p>
+                <h2 id="total-angsuran-hari-ini" class="text-base font-bold text-yellow-800">Rp 0</h2>
+            </div>
+            <div class="card border-l-4 border-orange-500 bg-orange-50 !p-3">
+                <p class="text-[10px] text-orange-700 uppercase font-bold">Angsuran Bulan Ini</p>
+                <h2 id="total-angsuran-bulan-ini" class="text-base font-bold text-orange-800">Rp 0</h2>
+            </div>
+            <div class="card border-l-4 border-purple-600 bg-purple-50 !p-3">
+                <p class="text-[10px] text-purple-700 uppercase font-bold">Gaji/Komisi (3%)</p>
+                <h2 id="total-gaji" class="text-base font-bold text-purple-800">Rp 0</h2>
+            </div>
+            <div class="card border-l-4 border-green-500 bg-green-50 !p-3">
+                <p class="text-[10px] text-green-700 uppercase font-bold">Tabungan</p>
+                <h2 id="total-simpanan" class="text-base font-bold text-green-800">Rp 0</h2>
+            </div>
+            <div class="card border-l-4 border-red-500 bg-red-50 !p-3">
+                <p class="text-[10px] text-red-700 uppercase font-bold">Total Piutang</p>
+                <h2 id="total-pinjaman" class="text-base font-bold text-red-800">Rp 0</h2>
+            </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <!-- Form Input -->
-            <div class="card h-fit">
-                <h2 class="font-bold text-gray-800 mb-4 border-b pb-2">Transaksi Baru</h2>
-                <div class="space-y-3">
-                    <div><label>Tanggal</label><input type="date" id="f-tgl"></div>
-                    <div>
-                        <label>Nasabah</label>
-                        <input type="text" id="f-nama" list="l-nasabah" placeholder="Nama nasabah...">
-                        <datalist id="l-nasabah"></datalist>
+            <div class="lg:col-span-4">
+                <div class="card border-t-4 border-blue-500">
+                    <h3 class="text-md font-bold mb-4 text-blue-700 flex items-center">
+                        <span class="mr-2">📝</span> Transaksi Baru
+                    </h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label>Tanggal Transaksi</label>
+                            <input type="date" id="tgl_transaksi">
+                        </div>
+                        <div>
+                            <label id="label-nasabah">Nama Nasabah / Sumber Kas</label>
+                            <input type="text" id="nama" list="list-nasabah" placeholder="Ketik nama...">
+                            <datalist id="list-nasabah"></datalist>
+                        </div>
+                        <div>
+                            <label>Jenis Transaksi</label>
+                            <select id="jenis" onchange="toggleInputs()" class="bg-white">
+                                <optgroup label="Operasional Nasabah">
+                                    <option value="pinjam">Pinjaman Baru (Cair)</option>
+                                    <option value="bayar">Bayar Angsuran</option>
+                                    <option value="tarik">Tarik Tabungan</option>
+                                    <option value="potong_hutang">Potong Hutang dgn Tabungan</option>
+                                </optgroup>
+                                <optgroup label="Manajemen Kas">
+                                    <option value="tambah_kas">Suntikan Kas / Modal Masuk</option>
+                                    <option value="tarik_kas_kantor">Tarik Kas untuk Kantor</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <div id="pinjam-fields">
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label>Tenor (Hari)</label>
+                                    <input type="number" id="tenor" placeholder="10">
+                                </div>
+                                <div>
+                                    <label>Bunga (%)</label>
+                                    <input type="number" id="persen_bunga" value="10" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label id="label-nominal">Nominal (Rp)</label>
+                            <input type="number" id="nominal" placeholder="0" class="text-lg font-bold text-blue-600">
+                        </div>
+
+                        <div id="perhitungan-potongan" class="p-3 bg-gray-50 border rounded text-xs space-y-1">
+                            <div class="flex justify-between"><span>Biaya Admin (5%):</span> <span id="view-admin" class="font-bold text-red-500">Rp 0</span></div>
+                            <div class="flex justify-between"><span>Simpanan Wajib (5%):</span> <span id="view-tabungan" class="font-bold text-green-600">Rp 0</span></div>
+                            <div class="flex justify-between border-t pt-1 mt-1 font-bold text-blue-600">
+                                <span>Diterima Nasabah:</span> <span id="view-terima">Rp 0</span>
+                            </div>
+                            <div class="flex justify-between text-gray-500 italic pt-1">
+                                <span>Total Tagihan di Kartu:</span> <span id="view-hutang-total">Rp 0</span>
+                            </div>
+                        </div>
+
+                        <button onclick="simpanTransaksi()" id="btn-submit" class="btn btn-primary w-full mt-2 shadow flex justify-center items-center">
+                            <span>Proses Sekarang</span>
+                        </button>
                     </div>
-                    <div>
-                        <label>Jenis</label>
-                        <select id="f-jenis" onchange="uiChange()">
-                            <option value="pinjam">Pinjaman Baru</option>
-                            <option value="bayar">Angsuran</option>
-                            <option value="tambah_kas">Modal Masuk</option>
-                            <option value="tarik_kas">Kas Keluar</option>
-                        </select>
-                    </div>
-                    <div id="p-box" class="grid grid-cols-2 gap-2">
-                        <div><label>Tenor (Hr)</label><input type="number" id="f-tenor" value="10"></div>
-                        <div><label>Bunga (%)</label><input type="number" id="f-bunga" value="10"></div>
-                    </div>
-                    <div><label>Nominal (Rp)</label><input type="number" id="f-nom" class="text-lg font-bold"></div>
-                    
-                    <div id="calc-preview" class="p-3 bg-blue-50 rounded-lg text-[10px] space-y-1">
-                        <div class="flex justify-between"><span>Admin 5%:</span><span id="v-adm">Rp 0</span></div>
-                        <div class="flex justify-between"><span>Tab. Wajib 5%:</span><span id="v-tab">Rp 0</span></div>
-                        <div class="flex justify-between font-bold text-blue-700 border-t mt-1 pt-1"><span>Diterima Nasabah:</span><span id="v-net">Rp 0</span></div>
-                    </div>
-                    <button onclick="proses()" class="btn-main mt-2">Simpan ke Cloud</button>
                 </div>
             </div>
 
-            <!-- Monitoring -->
-            <div class="lg:col-span-2 space-y-6">
-                <div class="card !p-0 overflow-hidden">
-                    <div class="p-4 border-b bg-gray-50"><h3 class="font-bold text-sm text-gray-700">Nasabah Aktif</h3></div>
-                    <div class="overflow-x-auto"><table class="w-full text-left text-xs">
-                        <thead class="bg-gray-50 text-gray-400 uppercase text-[9px]">
-                            <tr><th class="p-4">Nama</th><th class="p-4">Sisa Piutang</th><th class="p-4">Tabungan</th><th class="p-4 text-center">Aksi</th></tr>
-                        </thead>
-                        <tbody id="t-nasabah"></tbody>
-                    </table></div>
-                </div>
-                <div class="card !p-0 overflow-hidden">
-                    <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
-                        <h3 class="font-bold text-sm text-gray-700">Riwayat Transaksi</h3>
-                        <input type="text" id="f-search" placeholder="Cari nama..." oninput="render()" class="w-32 py-1 px-2 text-[10px]">
+            <!-- Tabel Data -->
+            <div class="lg:col-span-8 space-y-6">
+                <div class="card overflow-x-auto border-t-4 border-green-500 !p-0">
+                    <div class="p-4 border-b flex justify-between items-center">
+                        <h3 class="text-md font-bold flex items-center text-green-700">
+                            <span class="mr-2">👥</span> Monitoring Nasabah
+                        </h3>
                     </div>
-                    <div class="overflow-x-auto max-h-60 overflow-y-auto">
-                        <table class="w-full text-left text-[10px]"><tbody id="t-log"></tbody></table>
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-gray-50 text-gray-500 uppercase">
+                            <tr>
+                                <th class="px-4 py-3 border-b">Nasabah</th>
+                                <th class="px-4 py-3 border-b">Status</th>
+                                <th class="px-4 py-3 border-b">Sisa Tagihan</th>
+                                <th class="px-4 py-3 border-b">Tabungan</th>
+                                <th class="px-4 py-3 border-b text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabel-nasabah"></tbody>
+                    </table>
+                </div>
+
+                <!-- Riwayat -->
+                <div class="card border-t-4 border-indigo-500 !p-0">
+                    <div class="p-4 border-b flex justify-between items-center bg-indigo-50">
+                        <h3 class="text-md font-bold text-indigo-800">Riwayat Transaksi</h3>
+                        <div class="flex gap-2">
+                            <button onclick="resetFilter()" class="text-[10px] bg-white border px-3 py-1 rounded font-bold hover:bg-gray-100 uppercase">Reset</button>
+                        </div>
+                    </div>
+                    
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-3 border-b bg-white">
+                        <input type="text" id="filter_nama" placeholder="Cari nama..." oninput="renderUI()" class="text-xs">
+                        <input type="date" id="filter_tgl_mulai" onchange="renderUI()" class="text-xs">
+                        <input type="date" id="filter_tgl_akhir" onchange="renderUI()" class="text-xs">
+                    </div>
+
+                    <div class="overflow-x-auto max-h-[400px] overflow-y-auto">
+                        <table class="w-full text-left text-[11px]">
+                            <thead class="bg-gray-50 sticky top-0 border-b">
+                                <tr>
+                                    <th class="px-4 py-2">Waktu</th>
+                                    <th class="px-4 py-2">Nama</th>
+                                    <th class="px-4 py-2">Keterangan</th>
+                                    <th class="px-4 py-2 text-right">Mutasi (Rp)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabel-log"></tbody>
+                        </table>
+                        <div id="no-data" class="hidden text-center py-10 text-gray-400 italic">Tidak ditemukan data.</div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="toast" class="fixed bottom-6 right-6 hidden bg-gray-900 text-white px-4 py-2 rounded-lg text-xs shadow-2xl z-[300]"></div>
+    <div id="toast" class="fixed bottom-4 right-4 hidden bg-gray-900 text-white px-6 py-3 rounded-lg shadow-2xl z-50"></div>
 
+    <!-- Firebase SDK -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot, addDoc, increment } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBv740pDSUwYb1t9cJGnKizZXiwjZWt_6s",
-            authDomain: "dataku-e8e94.firebaseapp.com",
-            projectId: "dataku-e8e94",
-            storageBucket: "dataku-e8e94.firebasestorage.app",
-            messagingSenderId: "954735573351",
-            appId: "1:954735573351:web:46a74bc027cfcd305117c2",
-            measurementId: "G-738BYHBWBX"
+        // Global Variables
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'koperasi-artha-123';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // State
+        let localData = {
+            nasabah: {},
+            logs: [],
+            config: { kas: 0 }
+        };
+        let currentUser = null;
+
+        const fmt = (num) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
+
+        // UI Initialization
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+        document.getElementById('tgl_transaksi').value = todayStr;
+        document.getElementById('filter_tgl_akhir').value = todayStr;
+        document.getElementById('filter_tgl_mulai').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+
+        // Functions exposed to window
+        window.showToast = (msg) => {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 3000);
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+        window.toggleInputs = () => {
+            const jenis = document.getElementById('jenis').value;
+            const pnl = document.getElementById('perhitungan-potongan');
+            const pinjamFields = document.getElementById('pinjam-fields');
+            const labelNominal = document.getElementById('label-nominal');
+            const labelNasabah = document.getElementById('label-nasabah');
+            const btnSubmit = document.getElementById('btn-submit');
+            
+            btnSubmit.className = "btn w-full mt-2 shadow flex justify-center items-center ";
 
-        let state = { nasabah: {}, logs: [], kas: 0 };
-        const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
-
-        onAuthStateChanged(auth, (u) => {
-            if (u) {
-                document.getElementById('loader').classList.add('hidden');
-                startSync();
+            if (jenis === 'pinjam') {
+                pnl.classList.remove('hidden');
+                pinjamFields.classList.remove('hidden');
+                labelNominal.innerText = "Pokok Pinjaman (Rp)";
+                labelNasabah.innerText = "Nama Nasabah";
+                btnSubmit.classList.add('btn-primary');
+            } else if (jenis === 'tambah_kas') {
+                pnl.classList.add('hidden');
+                pinjamFields.classList.add('hidden');
+                labelNominal.innerText = "Nominal Suntikan (Rp)";
+                labelNasabah.innerText = "Sumber Kas (Owner/Modal)";
+                btnSubmit.classList.add('btn-indigo');
+            } else if (jenis === 'tarik_kas_kantor') {
+                pnl.classList.add('hidden');
+                pinjamFields.classList.add('hidden');
+                labelNominal.innerText = "Nominal Tarik (Rp)";
+                labelNasabah.innerText = "Keperluan Kantor";
+                btnSubmit.classList.add('bg-red-600', 'text-white');
             } else {
-                signInAnonymously(auth).catch(() => {
-                    document.getElementById('loader-content').classList.add('hidden');
-                    document.getElementById('setup-msg').classList.remove('hidden');
+                pnl.classList.add('hidden');
+                pinjamFields.classList.add('hidden');
+                labelNasabah.innerText = "Nama Nasabah";
+                btnSubmit.classList.add('btn-primary');
+                if (jenis === 'bayar') labelNominal.innerText = "Angsuran (Rp)";
+                else labelNominal.innerText = "Nominal (Rp)";
+            }
+            window.updateCalculations();
+        };
+
+        window.updateCalculations = () => {
+            const pokok = parseFloat(document.getElementById('nominal').value) || 0;
+            const bungaPersen = parseFloat(document.getElementById('persen_bunga').value) || 0;
+            
+            if (document.getElementById('jenis').value === 'pinjam') {
+                const admin = pokok * 0.05;
+                const tabungan = pokok * 0.05;
+                const cair = pokok - admin - tabungan;
+                const totalHutang = pokok + (pokok * (bungaPersen / 100));
+                
+                document.getElementById('view-admin').innerText = fmt(admin);
+                document.getElementById('view-tabungan').innerText = fmt(tabungan);
+                document.getElementById('view-terima').innerText = fmt(cair);
+                document.getElementById('view-hutang-total').innerText = fmt(totalHutang);
+            }
+        };
+
+        window.simpanTransaksi = async () => {
+            if (!currentUser) return showToast("❌ Belum terhubung ke server.");
+
+            const tglVal = document.getElementById('tgl_transaksi').value;
+            const nama = document.getElementById('nama').value.trim();
+            const jenis = document.getElementById('jenis').value;
+            const nominal = parseFloat(document.getElementById('nominal').value) || 0;
+
+            if (!tglVal || !nama || nominal <= 0) return showToast("⚠️ Data tidak lengkap!");
+
+            const isNasabahOp = ['pinjam', 'bayar', 'tarik', 'potong_hutang'].includes(jenis);
+            let nsb = isNasabahOp ? (localData.nasabah[nama] || { hutang: 0, tabungan: 0, tglPinjamTerakhir: null, tenor: 0 }) : null;
+            
+            let logKet = "";
+            let arusKas = 0;
+            let type = "standard";
+            let updatedKas = localData.config.kas;
+
+            try {
+                if (jenis === 'pinjam') {
+                    const tenor = parseInt(document.getElementById('tenor').value);
+                    if (!tenor) return showToast("⚠️ Isi tenor!");
+                    const admin = nominal * 0.05;
+                    const tabungan = nominal * 0.05;
+                    const cair = nominal - admin - tabungan;
+                    const bunga = nominal * (parseFloat(document.getElementById('persen_bunga').value) / 100);
+                    
+                    if (updatedKas < cair) return showToast("❌ Kas tidak cukup!");
+
+                    nsb.hutang += (nominal + bunga);
+                    nsb.tabungan += tabungan;
+                    nsb.tglPinjamTerakhir = tglVal;
+                    nsb.tenor = tenor;
+                    updatedKas -= cair;
+                    logKet = `Pinjaman Baru (${tenor} hr)`;
+                    arusKas = -cair;
+                    type = "pinjam";
+                } 
+                else if (jenis === 'bayar') {
+                    nsb.hutang -= nominal;
+                    updatedKas += nominal;
+                    logKet = "Angsuran Nasabah";
+                    arusKas = nominal;
+                    type = "angsuran";
+                } 
+                else if (jenis === 'tarik') {
+                    if (nsb.tabungan < nominal) return showToast("⚠️ Tabungan tidak cukup!");
+                    nsb.tabungan -= nominal;
+                    updatedKas -= nominal;
+                    logKet = "Tarik Tabungan";
+                    arusKas = -nominal;
+                } 
+                else if (jenis === 'potong_hutang') {
+                    if (nsb.tabungan < nominal || nsb.hutang < nominal) return showToast("⚠️ Saldo tidak mencukupi!");
+                    nsb.tabungan -= nominal;
+                    nsb.hutang -= nominal;
+                    logKet = "Potong Hutang (Intern)";
+                    arusKas = 0; 
+                }
+                else if (jenis === 'tambah_kas') {
+                    updatedKas += nominal;
+                    logKet = "Suntikan Kas";
+                    arusKas = nominal;
+                    type = "kas-in";
+                }
+                else if (jenis === 'tarik_kas_kantor') {
+                    updatedKas -= nominal;
+                    logKet = "Tarik Kas Kantor";
+                    arusKas = -nominal;
+                }
+
+                // Simpan ke Firestore (Batch)
+                const batch = writeBatch(db);
+
+                // 1. Update Kas
+                const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global');
+                batch.set(configRef, { kas: updatedKas });
+
+                // 2. Simpan Log
+                const logRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'));
+                batch.set(logRef, { 
+                    tgl: tglVal, 
+                    nama, 
+                    ket: logKet, 
+                    nominal: arusKas, 
+                    type, 
+                    nominalAsli: nominal,
+                    createdAt: new Date().getTime() 
                 });
+
+                // 3. Update Nasabah jika ada
+                if (isNasabahOp) {
+                    const nsbRef = doc(db, 'artifacts', appId, 'public', 'data', 'nasabah', nama);
+                    batch.set(nsbRef, nsb);
+                }
+
+                await batch.commit();
+                showToast("✅ Berhasil disimpan ke Cloud!");
+                document.getElementById('nominal').value = "";
+            } catch (error) {
+                console.error(error);
+                showToast("❌ Gagal menyimpan data.");
+            }
+        };
+
+        window.pilihNasabah = (nama) => {
+            document.getElementById('nama').value = nama;
+            document.getElementById('jenis').value = 'bayar';
+            window.toggleInputs();
+            document.getElementById('nominal').focus();
+        };
+
+        window.resetFilter = () => {
+            const now = new Date();
+            document.getElementById('filter_nama').value = "";
+            document.getElementById('filter_tgl_mulai').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+            document.getElementById('filter_tgl_akhir').value = now.toISOString().split('T')[0];
+            renderUI();
+        };
+
+        function getStatusNasabah(nsb) {
+            if (nsb.hutang <= 0) return { label: 'Lunas', class: 'bg-green-100 text-green-700' };
+            if (nsb.tglPinjamTerakhir && nsb.tenor) {
+                const tglPinjam = new Date(nsb.tglPinjamTerakhir);
+                const tglJatuhTempo = new Date(tglPinjam);
+                tglJatuhTempo.setDate(tglPinjam.getDate() + nsb.tenor);
+                const hariIni = new Date();
+                hariIni.setHours(0,0,0,0);
+                tglJatuhTempo.setHours(0,0,0,0);
+                if (hariIni > tglJatuhTempo) return { label: 'Jatuh Tempo', class: 'bg-red-100 text-red-700' };
+            }
+            return { label: 'Berjalan', class: 'bg-blue-100 text-blue-700' };
+        }
+
+        window.renderUI = () => {
+            document.getElementById('total-kas').innerText = fmt(localData.config.kas || 0);
+            
+            let totalS = 0, totalH = 0, angsuranHariIni = 0, angsuranBulanIni = 0;
+            const now = new Date();
+            const curMonth = now.getMonth();
+            const curYear = now.getFullYear();
+            const curDayStr = now.toISOString().split('T')[0];
+
+            // Stats
+            localData.logs.forEach(log => {
+                if(log.type === 'angsuran') {
+                    if(log.tgl === curDayStr) angsuranHariIni += log.nominalAsli;
+                    const lDate = new Date(log.tgl);
+                    if(lDate.getMonth() === curMonth && lDate.getFullYear() === curYear) angsuranBulanIni += log.nominalAsli;
+                }
+            });
+
+            document.getElementById('total-angsuran-hari-ini').innerText = fmt(angsuranHariIni);
+            document.getElementById('total-angsuran-bulan-ini').innerText = fmt(angsuranBulanIni);
+            document.getElementById('total-gaji').innerText = fmt(angsuranBulanIni * 0.03);
+
+            // Nasabah
+            const tbodyN = document.getElementById('tabel-nasabah');
+            const datalist = document.getElementById('list-nasabah');
+            tbodyN.innerHTML = "";
+            datalist.innerHTML = "";
+
+            Object.entries(localData.nasabah).sort().forEach(([nama, data]) => {
+                totalS += (data.tabungan || 0);
+                totalH += (data.hutang || 0);
+
+                const opt = document.createElement('option');
+                opt.value = nama;
+                datalist.appendChild(opt);
+
+                if(data.tabungan > 0 || data.hutang > 0) {
+                    const status = getStatusNasabah(data);
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50 transition";
+                    tr.innerHTML = `
+                        <td class="px-4 py-3 border-b font-medium uppercase">${nama}</td>
+                        <td class="px-4 py-3 border-b"><span class="status-badge ${status.class}">${status.label}</span></td>
+                        <td class="px-4 py-3 border-b text-red-600 font-bold">${fmt(data.hutang)}</td>
+                        <td class="px-4 py-3 border-b text-green-600 font-bold">${fmt(data.tabungan)}</td>
+                        <td class="px-4 py-3 border-b text-center">
+                            <button onclick="pilihNasabah('${nama}')" class="bg-gray-100 text-gray-700 border px-2 py-1 rounded text-[10px] font-bold hover:bg-gray-200">PILIH</button>
+                        </td>
+                    `;
+                    tbodyN.appendChild(tr);
+                }
+            });
+
+            document.getElementById('total-simpanan').innerText = fmt(totalS);
+            document.getElementById('total-pinjaman').innerText = fmt(totalH);
+
+            // Logs
+            const fNama = document.getElementById('filter_nama').value.toLowerCase();
+            const fStart = document.getElementById('filter_tgl_mulai').value;
+            const fEnd = document.getElementById('filter_tgl_akhir').value;
+
+            const filteredLogs = localData.logs.filter(l => {
+                return l.nama.toLowerCase().includes(fNama) && (!fStart || l.tgl >= fStart) && (!fEnd || l.tgl <= fEnd);
+            });
+
+            const tbodyL = document.getElementById('tabel-log');
+            tbodyL.innerHTML = "";
+            document.getElementById('no-data').classList.toggle('hidden', filteredLogs.length > 0);
+
+            filteredLogs.forEach(log => {
+                const tr = document.createElement('tr');
+                let clr = "text-gray-600";
+                if(log.type === 'angsuran') clr = "text-green-600 font-bold";
+                if(log.type === 'kas-in') clr = "text-blue-600 font-bold";
+                if(log.nominal < 0) clr = "text-red-500 font-bold";
+
+                tr.innerHTML = `
+                    <td class="px-4 py-2 border-b text-gray-400 font-mono">${log.tgl.split('-').reverse().join('/')}</td>
+                    <td class="px-4 py-2 border-b font-medium uppercase">${log.nama}</td>
+                    <td class="px-4 py-2 border-b text-gray-400 italic">${log.ket}</td>
+                    <td class="px-4 py-2 border-b text-right ${clr}">${log.nominal === 0 ? '-' : fmt(log.nominal)}</td>
+                `;
+                tbodyL.appendChild(tr);
+            });
+        };
+
+        // Auth & Init
+        const init = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Auth Error:", err);
+                showToast("❌ Gagal login.");
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('loader').classList.add('hidden');
+                setupListeners();
             }
         });
 
-        function startSync() {
-            onSnapshot(doc(db, 'config', 'finance'), (s) => {
-                state.kas = s.exists() ? (s.data().kas || 0) : 0;
-                render();
-            });
-            onSnapshot(collection(db, 'nasabah'), (s) => {
-                state.nasabah = {};
-                s.forEach(d => state.nasabah[d.id] = d.data());
-                render();
-            });
-            onSnapshot(collection(db, 'logs'), (s) => {
-                const l = []; s.forEach(d => l.push({...d.data()}));
-                state.logs = l.sort((a,b) => b.ts - a.ts);
-                render();
-            });
+        function setupListeners() {
+            // Listen to Config
+            onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global'), (doc) => {
+                if(doc.exists()) localData.config = doc.data();
+                renderUI();
+            }, (err) => console.error("Config Listener Err:", err));
+
+            // Listen to Nasabah
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'nasabah'), (snap) => {
+                snap.forEach(doc => {
+                    localData.nasabah[doc.id] = doc.data();
+                });
+                renderUI();
+            }, (err) => console.error("Nasabah Listener Err:", err));
+
+            // Listen to Logs (Limit locally for performance)
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), (snap) => {
+                let logs = [];
+                snap.forEach(doc => logs.push(doc.data()));
+                localData.logs = logs.sort((a,b) => b.createdAt - a.createdAt);
+                renderUI();
+            }, (err) => console.error("Logs Listener Err:", err));
         }
 
-        window.uiChange = () => {
-            const j = document.getElementById('f-jenis').value;
-            document.getElementById('p-box').classList.toggle('hidden', j !== 'pinjam');
-            document.getElementById('calc-preview').classList.toggle('hidden', j !== 'pinjam');
-            calc();
-        };
+        document.getElementById('nominal').addEventListener('input', window.updateCalculations);
+        document.getElementById('persen_bunga').addEventListener('input', window.updateCalculations);
 
-        const calc = () => {
-            const n = parseFloat(document.getElementById('f-nom').value) || 0;
-            document.getElementById('v-adm').innerText = fmt(n * 0.05);
-            document.getElementById('v-tab').innerText = fmt(n * 0.05);
-            document.getElementById('v-net').innerText = fmt(n * 0.9);
-        };
-        document.getElementById('f-nom').oninput = calc;
+        setInterval(() => {
+            const clock = document.getElementById('clock');
+            if (clock) clock.innerText = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
+        }, 1000);
 
-        window.proses = async () => {
-            const tgl = document.getElementById('f-tgl').value;
-            const nama = document.getElementById('f-nama').value.trim();
-            const j = document.getElementById('f-jenis').value;
-            const nom = parseFloat(document.getElementById('f-nom').value) || 0;
-
-            if(!tgl || !nama || nom <= 0) return alert("Data tidak lengkap!");
-
-            const kRef = doc(db, 'config', 'finance');
-            const nRef = doc(db, 'nasabah', nama);
-            const lRef = collection(db, 'logs');
-
-            try {
-                if(j === 'pinjam') {
-                    const cair = nom * 0.9;
-                    if(state.kas < cair) return alert("Kas tidak cukup!");
-                    await setDoc(nRef, { hutang: increment(nom * 1.1), tabungan: increment(nom * 0.05) }, {merge:true});
-                    await setDoc(kRef, { kas: increment(-cair) }, {merge:true});
-                    await addDoc(lRef, { tgl, nama, ket: "Pinjam Baru", val: -cair, type: "pinjam", ts: Date.now() });
-                } else if(j === 'bayar') {
-                    await setDoc(nRef, { hutang: increment(-nom) }, {merge:true});
-                    await setDoc(kRef, { kas: increment(nom) }, {merge:true});
-                    await addDoc(lRef, { tgl, nama, ket: "Angsuran", val: nom, type: "bayar", ts: Date.now() });
-                } else {
-                    const mult = (j === 'tambah_kas') ? 1 : -1;
-                    await setDoc(kRef, { kas: increment(nom * mult) }, {merge:true});
-                    await addDoc(lRef, { tgl, nama, ket: (j === 'tambah_kas' ? "Modal Masuk" : "Kas Keluar"), val: nom * mult, ts: Date.now() });
-                }
-                document.getElementById('f-nom').value = "";
-                alert("Berhasil!");
-            } catch(e) { alert("Gagal! Cek Firestore Rules."); }
-        };
-
-        window.render = () => {
-            document.getElementById('stat-kas').innerText = fmt(state.kas);
-            let tS = 0, tP = 0, hI = 0, bI = 0;
-            const now = new Date(), m = now.getMonth(), y = now.getFullYear(), dS = now.toISOString().split('T')[0];
-
-            state.logs.forEach(l => {
-                if(l.type === 'bayar') {
-                    if(l.tgl === dS) hI += l.val;
-                    const ld = new Date(l.tgl);
-                    if(ld.getMonth() === m && ld.getFullYear() === y) bI += l.val;
-                }
-            });
-
-            document.getElementById('stat-hari').innerText = fmt(hI);
-            document.getElementById('stat-bulan').innerText = fmt(bI);
-            document.getElementById('stat-gaji').innerText = fmt(bI * 0.03);
-
-            const tN = document.getElementById('t-nasabah');
-            const dL = document.getElementById('l-nasabah');
-            tN.innerHTML = ""; dL.innerHTML = "";
-
-            for(let n in state.nasabah) {
-                const d = state.nasabah[n];
-                tS += (d.tabungan||0); tP += (d.hutang||0);
-                const opt = document.createElement('option'); opt.value = n; dL.appendChild(opt);
-                if((d.hutang||0) > 0 || (d.tabungan||0) > 0) {
-                    const tr = document.createElement('tr'); tr.className = "border-b hover:bg-gray-50 text-[11px]";
-                    tr.innerHTML = `<td class="p-4 font-bold text-gray-700">${n}</td><td class="p-4 text-red-600 font-bold">${fmt(d.hutang||0)}</td><td class="p-4 text-green-600">${fmt(d.tabungan||0)}</td><td class="p-4 text-center"><button onclick="pilih('${n}')" class="text-blue-600 font-bold">PILIH</button></td>`;
-                    tN.appendChild(tr);
-                }
-            }
-            document.getElementById('stat-tabungan').innerText = fmt(tS);
-            document.getElementById('stat-piutang').innerText = fmt(tP);
-
-            const search = document.getElementById('f-search').value.toLowerCase();
-            const tLog = document.getElementById('t-log'); tLog.innerHTML = "";
-            state.logs.filter(l => l.nama.toLowerCase().includes(search)).slice(0,20).forEach(l => {
-                const tr = document.createElement('tr'); tr.className = "border-b";
-                tr.innerHTML = `<td class="p-3 text-gray-400">${l.tgl.split('-').reverse().slice(0,2).join('/')}</td><td class="p-3 font-bold uppercase">${l.nama}</td><td class="p-3 text-gray-400 italic">${l.ket}</td><td class="p-3 text-right font-bold ${l.val<0?'text-red-500':'text-green-600'}">${fmt(l.val)}</td>`;
-                tLog.appendChild(tr);
-            });
-        };
-
-        window.pilih = (n) => { document.getElementById('f-nama').value = n; document.getElementById('f-jenis').value = 'bayar'; uiChange(); };
-        document.getElementById('f-tgl').value = new Date().toISOString().split('T')[0];
-        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleString('id-ID'); }, 1000);
-        uiChange();
+        init();
+        window.toggleInputs();
     </script>
 </body>
 </html>
+
+```
