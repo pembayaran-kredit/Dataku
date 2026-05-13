@@ -18,6 +18,7 @@
     </style>
 </head>
 <body class="p-4 md:p-6">
+    <!-- Overlay Loading -->
     <div id="loader" class="loading-overlay">
         <div class="text-center">
             <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
@@ -29,7 +30,7 @@
         <header class="mb-6 flex justify-between items-end border-b pb-4">
             <div>
                 <h1 class="text-2xl font-bold text-gray-800 tracking-tight">Koperasi Artha Harian</h1>
-                <p class="text-sm text-gray-500">Cloud Synchronized System</p>
+                <p class="text-sm text-gray-500">Database: angsuran-nasabah</p>
             </div>
             <div id="clock" class="text-right text-xs text-gray-400 font-mono"></div>
         </header>
@@ -189,37 +190,45 @@
 
     <div id="toast" class="fixed bottom-4 right-4 hidden bg-gray-900 text-white px-6 py-3 rounded-lg shadow-2xl z-50"></div>
 
-    <!-- Firebase SDK -->
+    <!-- Firebase SDK Implementation -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global Variables
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'koperasi-artha-123';
+        // Konfigurasi dari Anda
+        const firebaseConfig = {
+            apiKey: "AIzaSyC33tno0jYZXTVp0d8drZfBVa73N9Qv1jM",
+            authDomain: "angsuran-nasabah.firebaseapp.com",
+            projectId: "angsuran-nasabah",
+            storageBucket: "angsuran-nasabah.firebasestorage.app",
+            messagingSenderId: "304623946024",
+            appId: "1:304623946024:web:1d03fe1aaa1d1bf78ae81d",
+            measurementId: "G-7P563537DK"
+        };
+
+        const appId = "koperasi-artha-v1"; // Identitas folder data di Firestore
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // State
+        // State Lokal
         let localData = {
             nasabah: {},
             logs: [],
             config: { kas: 0 }
         };
-        let currentUser = null;
 
         const fmt = (num) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
-        // UI Initialization
+        // UI Date Init
         const now = new Date();
         const todayStr = now.toISOString().split('T')[0];
         document.getElementById('tgl_transaksi').value = todayStr;
         document.getElementById('filter_tgl_akhir').value = todayStr;
         document.getElementById('filter_tgl_mulai').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
-        // Functions exposed to window
+        // Global functions for HTML access
         window.showToast = (msg) => {
             const t = document.getElementById('toast');
             t.innerText = msg;
@@ -284,7 +293,7 @@
         };
 
         window.simpanTransaksi = async () => {
-            if (!currentUser) return showToast("❌ Belum terhubung ke server.");
+            if (!auth.currentUser) return showToast("❌ Sesi belum siap. Coba lagi.");
 
             const tglVal = document.getElementById('tgl_transaksi').value;
             const nama = document.getElementById('nama').value.trim();
@@ -299,21 +308,19 @@
             let logKet = "";
             let arusKas = 0;
             let type = "standard";
-            let updatedKas = localData.config.kas;
+            let updatedKas = localData.config.kas || 0;
 
             try {
                 if (jenis === 'pinjam') {
                     const tenor = parseInt(document.getElementById('tenor').value);
                     if (!tenor) return showToast("⚠️ Isi tenor!");
-                    const admin = nominal * 0.05;
-                    const tabungan = nominal * 0.05;
-                    const cair = nominal - admin - tabungan;
+                    const cair = nominal * 0.9; // Potong 5% admin + 5% tabungan
                     const bunga = nominal * (parseFloat(document.getElementById('persen_bunga').value) / 100);
                     
                     if (updatedKas < cair) return showToast("❌ Kas tidak cukup!");
 
                     nsb.hutang += (nominal + bunga);
-                    nsb.tabungan += tabungan;
+                    nsb.tabungan += (nominal * 0.05);
                     nsb.tglPinjamTerakhir = tglVal;
                     nsb.tenor = tenor;
                     updatedKas -= cair;
@@ -339,7 +346,7 @@
                     if (nsb.tabungan < nominal || nsb.hutang < nominal) return showToast("⚠️ Saldo tidak mencukupi!");
                     nsb.tabungan -= nominal;
                     nsb.hutang -= nominal;
-                    logKet = "Potong Hutang (Intern)";
+                    logKet = "Potong Hutang (Tabungan)";
                     arusKas = 0; 
                 }
                 else if (jenis === 'tambah_kas') {
@@ -349,31 +356,23 @@
                     type = "kas-in";
                 }
                 else if (jenis === 'tarik_kas_kantor') {
+                    if (updatedKas < nominal) return showToast("❌ Kas tidak cukup!");
                     updatedKas -= nominal;
                     logKet = "Tarik Kas Kantor";
                     arusKas = -nominal;
                 }
 
-                // Simpan ke Firestore (Batch)
+                // Write to Firestore (Batch)
                 const batch = writeBatch(db);
-
-                // 1. Update Kas
                 const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global');
                 batch.set(configRef, { kas: updatedKas });
 
-                // 2. Simpan Log
                 const logRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'));
                 batch.set(logRef, { 
-                    tgl: tglVal, 
-                    nama, 
-                    ket: logKet, 
-                    nominal: arusKas, 
-                    type, 
-                    nominalAsli: nominal,
+                    tgl: tglVal, nama, ket: logKet, nominal: arusKas, type, nominalAsli: nominal,
                     createdAt: new Date().getTime() 
                 });
 
-                // 3. Update Nasabah jika ada
                 if (isNasabahOp) {
                     const nsbRef = doc(db, 'artifacts', appId, 'public', 'data', 'nasabah', nama);
                     batch.set(nsbRef, nsb);
@@ -384,87 +383,45 @@
                 document.getElementById('nominal').value = "";
             } catch (error) {
                 console.error(error);
-                showToast("❌ Gagal menyimpan data.");
+                showToast("❌ Gagal menyimpan.");
             }
         };
-
-        window.pilihNasabah = (nama) => {
-            document.getElementById('nama').value = nama;
-            document.getElementById('jenis').value = 'bayar';
-            window.toggleInputs();
-            document.getElementById('nominal').focus();
-        };
-
-        window.resetFilter = () => {
-            const now = new Date();
-            document.getElementById('filter_nama').value = "";
-            document.getElementById('filter_tgl_mulai').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-            document.getElementById('filter_tgl_akhir').value = now.toISOString().split('T')[0];
-            renderUI();
-        };
-
-        function getStatusNasabah(nsb) {
-            if (nsb.hutang <= 0) return { label: 'Lunas', class: 'bg-green-100 text-green-700' };
-            if (nsb.tglPinjamTerakhir && nsb.tenor) {
-                const tglPinjam = new Date(nsb.tglPinjamTerakhir);
-                const tglJatuhTempo = new Date(tglPinjam);
-                tglJatuhTempo.setDate(tglPinjam.getDate() + nsb.tenor);
-                const hariIni = new Date();
-                hariIni.setHours(0,0,0,0);
-                tglJatuhTempo.setHours(0,0,0,0);
-                if (hariIni > tglJatuhTempo) return { label: 'Jatuh Tempo', class: 'bg-red-100 text-red-700' };
-            }
-            return { label: 'Berjalan', class: 'bg-blue-100 text-blue-700' };
-        }
 
         window.renderUI = () => {
             document.getElementById('total-kas').innerText = fmt(localData.config.kas || 0);
-            
-            let totalS = 0, totalH = 0, angsuranHariIni = 0, angsuranBulanIni = 0;
+            let totalS = 0, totalH = 0, angHari = 0, angBulan = 0;
             const now = new Date();
-            const curMonth = now.getMonth();
-            const curYear = now.getFullYear();
-            const curDayStr = now.toISOString().split('T')[0];
+            const curMonth = now.getMonth(), curYear = now.getFullYear(), curDay = now.toISOString().split('T')[0];
 
-            // Stats
             localData.logs.forEach(log => {
                 if(log.type === 'angsuran') {
-                    if(log.tgl === curDayStr) angsuranHariIni += log.nominalAsli;
-                    const lDate = new Date(log.tgl);
-                    if(lDate.getMonth() === curMonth && lDate.getFullYear() === curYear) angsuranBulanIni += log.nominalAsli;
+                    if(log.tgl === curDay) angHari += log.nominalAsli;
+                    const d = new Date(log.tgl);
+                    if(d.getMonth() === curMonth && d.getFullYear() === curYear) angBulan += log.nominalAsli;
                 }
             });
 
-            document.getElementById('total-angsuran-hari-ini').innerText = fmt(angsuranHariIni);
-            document.getElementById('total-angsuran-bulan-ini').innerText = fmt(angsuranBulanIni);
-            document.getElementById('total-gaji').innerText = fmt(angsuranBulanIni * 0.03);
+            document.getElementById('total-angsuran-hari-ini').innerText = fmt(angHari);
+            document.getElementById('total-angsuran-bulan-ini').innerText = fmt(angBulan);
+            document.getElementById('total-gaji').innerText = fmt(angBulan * 0.03);
 
-            // Nasabah
-            const tbodyN = document.getElementById('tabel-nasabah');
-            const datalist = document.getElementById('list-nasabah');
-            tbodyN.innerHTML = "";
-            datalist.innerHTML = "";
+            const tbodyN = document.getElementById('tabel-nasabah'), datalist = document.getElementById('list-nasabah');
+            tbodyN.innerHTML = ""; datalist.innerHTML = "";
 
             Object.entries(localData.nasabah).sort().forEach(([nama, data]) => {
-                totalS += (data.tabungan || 0);
-                totalH += (data.hutang || 0);
-
-                const opt = document.createElement('option');
-                opt.value = nama;
-                datalist.appendChild(opt);
+                totalS += (data.tabungan || 0); totalH += (data.hutang || 0);
+                const opt = document.createElement('option'); opt.value = nama; datalist.appendChild(opt);
 
                 if(data.tabungan > 0 || data.hutang > 0) {
-                    const status = getStatusNasabah(data);
+                    const st = getStatus(data);
                     const tr = document.createElement('tr');
-                    tr.className = "hover:bg-gray-50 transition";
+                    tr.className = "hover:bg-gray-50";
                     tr.innerHTML = `
                         <td class="px-4 py-3 border-b font-medium uppercase">${nama}</td>
-                        <td class="px-4 py-3 border-b"><span class="status-badge ${status.class}">${status.label}</span></td>
+                        <td class="px-4 py-3 border-b"><span class="status-badge ${st.class}">${st.label}</span></td>
                         <td class="px-4 py-3 border-b text-red-600 font-bold">${fmt(data.hutang)}</td>
                         <td class="px-4 py-3 border-b text-green-600 font-bold">${fmt(data.tabungan)}</td>
-                        <td class="px-4 py-3 border-b text-center">
-                            <button onclick="pilihNasabah('${nama}')" class="bg-gray-100 text-gray-700 border px-2 py-1 rounded text-[10px] font-bold hover:bg-gray-200">PILIH</button>
-                        </td>
+                        <td class="px-4 py-3 border-b text-center"><button onclick="pilihNasabah('${nama}')" class="bg-gray-100 px-2 py-1 rounded text-[10px] font-bold">PILIH</button></td>
                     `;
                     tbodyN.appendChild(tr);
                 }
@@ -473,91 +430,58 @@
             document.getElementById('total-simpanan').innerText = fmt(totalS);
             document.getElementById('total-pinjaman').innerText = fmt(totalH);
 
-            // Logs
             const fNama = document.getElementById('filter_nama').value.toLowerCase();
-            const fStart = document.getElementById('filter_tgl_mulai').value;
-            const fEnd = document.getElementById('filter_tgl_akhir').value;
-
-            const filteredLogs = localData.logs.filter(l => {
-                return l.nama.toLowerCase().includes(fNama) && (!fStart || l.tgl >= fStart) && (!fEnd || l.tgl <= fEnd);
-            });
+            const fStart = document.getElementById('filter_tgl_mulai').value, fEnd = document.getElementById('filter_tgl_akhir').value;
+            const filtered = localData.logs.filter(l => l.nama.toLowerCase().includes(fNama) && (!fStart || l.tgl >= fStart) && (!fEnd || l.tgl <= fEnd));
 
             const tbodyL = document.getElementById('tabel-log');
             tbodyL.innerHTML = "";
-            document.getElementById('no-data').classList.toggle('hidden', filteredLogs.length > 0);
+            document.getElementById('no-data').classList.toggle('hidden', filtered.length > 0);
 
-            filteredLogs.forEach(log => {
+            filtered.forEach(log => {
                 const tr = document.createElement('tr');
-                let clr = "text-gray-600";
-                if(log.type === 'angsuran') clr = "text-green-600 font-bold";
-                if(log.type === 'kas-in') clr = "text-blue-600 font-bold";
-                if(log.nominal < 0) clr = "text-red-500 font-bold";
-
+                let clr = log.type === 'angsuran' ? "text-green-600 font-bold" : (log.nominal < 0 ? "text-red-500 font-bold" : "text-gray-600");
                 tr.innerHTML = `
-                    <td class="px-4 py-2 border-b text-gray-400 font-mono">${log.tgl.split('-').reverse().join('/')}</td>
-                    <td class="px-4 py-2 border-b font-medium uppercase">${log.nama}</td>
-                    <td class="px-4 py-2 border-b text-gray-400 italic">${log.ket}</td>
+                    <td class="px-4 py-2 border-b text-gray-400">${log.tgl.split('-').reverse().join('/')}</td>
+                    <td class="px-4 py-2 border-b uppercase">${log.nama}</td>
+                    <td class="px-4 py-2 border-b italic">${log.ket}</td>
                     <td class="px-4 py-2 border-b text-right ${clr}">${log.nominal === 0 ? '-' : fmt(log.nominal)}</td>
                 `;
                 tbodyL.appendChild(tr);
             });
         };
 
-        // Auth & Init
-        const init = async () => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (err) {
-                console.error("Auth Error:", err);
-                showToast("❌ Gagal login.");
+        function getStatus(nsb) {
+            if (nsb.hutang <= 0) return { label: 'Lunas', class: 'bg-green-100 text-green-700' };
+            if (nsb.tglPinjamTerakhir && nsb.tenor) {
+                const due = new Date(nsb.tglPinjamTerakhir); due.setDate(due.getDate() + nsb.tenor);
+                const h = new Date(); h.setHours(0,0,0,0); due.setHours(0,0,0,0);
+                if (h > due) return { label: 'Jatuh Tempo', class: 'bg-red-100 text-red-700' };
             }
-        };
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                currentUser = user;
-                document.getElementById('loader').classList.add('hidden');
-                setupListeners();
-            }
-        });
-
-        function setupListeners() {
-            // Listen to Config
-            onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global'), (doc) => {
-                if(doc.exists()) localData.config = doc.data();
-                renderUI();
-            }, (err) => console.error("Config Listener Err:", err));
-
-            // Listen to Nasabah
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'nasabah'), (snap) => {
-                snap.forEach(doc => {
-                    localData.nasabah[doc.id] = doc.data();
-                });
-                renderUI();
-            }, (err) => console.error("Nasabah Listener Err:", err));
-
-            // Listen to Logs (Limit locally for performance)
-            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), (snap) => {
-                let logs = [];
-                snap.forEach(doc => logs.push(doc.data()));
-                localData.logs = logs.sort((a,b) => b.createdAt - a.createdAt);
-                renderUI();
-            }, (err) => console.error("Logs Listener Err:", err));
+            return { label: 'Berjalan', class: 'bg-blue-100 text-blue-700' };
         }
 
-        document.getElementById('nominal').addEventListener('input', window.updateCalculations);
-        document.getElementById('persen_bunga').addEventListener('input', window.updateCalculations);
+        window.pilihNasabah = (n) => { document.getElementById('nama').value = n; document.getElementById('jenis').value = 'bayar'; window.toggleInputs(); };
+        window.resetFilter = () => { document.getElementById('filter_nama').value = ""; window.renderUI(); };
 
-        setInterval(() => {
-            const clock = document.getElementById('clock');
-            if (clock) clock.innerText = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
-        }, 1000);
+        // Start Firebase
+        (async () => {
+            try {
+                await signInAnonymously(auth);
+                document.getElementById('loader').classList.add('hidden');
+                
+                // Real-time Listeners
+                onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global'), d => { if(d.exists()) localData.config = d.data(); window.renderUI(); });
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'nasabah'), s => { s.forEach(d => localData.nasabah[d.id] = d.data()); window.renderUI(); });
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), s => {
+                    let ls = []; s.forEach(d => ls.push(d.data()));
+                    localData.logs = ls.sort((a,b) => b.createdAt - a.createdAt);
+                    window.renderUI();
+                });
+            } catch (e) { console.error(e); showToast("❌ Koneksi Gagal."); }
+        })();
 
-        init();
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }); }, 1000);
         window.toggleInputs();
     </script>
 </body>
